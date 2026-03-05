@@ -1,0 +1,17 @@
+{
+  "name": "pgmitche-github-io",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "export-pdf": "bun scripts/export-pdf.ts"
+  },
+  "devDependencies": {
+    "puppeteer": "^24.37.5",
+    "typescript": "^5.4.0",
+    "vite": "^5.2.0"
+  }
+}

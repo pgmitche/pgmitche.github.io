@@ -1,0 +1,41 @@
+name: Export PDF & Attach to Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write  # needed to upload release assets
+
+jobs:
+  export-pdf:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # puppeteer needs a real Chrome; install the bundled one via puppeteer's
+      # post-install hook, then satisfy its system library requirements.
+      - name: Install Chrome system dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
+            libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libgbm1 \
+            libasound2t64
+
+      - name: Export resume to PDF
+        run: bun run export-pdf
+
+      - name: Upload PDF to release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PDF=$(ls *-Resume.pdf | head -1)
+          gh release upload "${{ github.event.release.tag_name }}" "$PDF" --clobber

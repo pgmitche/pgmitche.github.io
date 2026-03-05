@@ -1,0 +1,171 @@
+# =============================================================================
+# Resume / CV data — edit this file to update all page content.
+# The site rebuilds automatically when you save (vite dev server).
+# =============================================================================
+
+name: Patrick Mitchell
+tagline: Software Engineer
+
+contact:
+  email: patrick.mitchell95@gmail.com
+  location: Toronto, ON | Melbourne, AU
+  githubOrg: foundatn-io
+  linkedin: in/patrick-mitchell-softeng
+
+# ---------------------------------------------------------------------------
+# Work experience — most recent first.
+# ---------------------------------------------------------------------------
+experience:
+  - title: Software Engineer
+    company: Fleet Space Technologies
+    location: Remote | Toronto, CA | Melbourne, AU
+    startDate: Mar 2024
+    endDate: Present
+    highlights:
+      - "Led modernisation of Fleet's cloud APIs, replacing legacy TypeScript and Go services from
+        the company's founding with a unified, Go-native, code-generation-driven platform
+        that reduced cognitive load, accelerated onboarding, and enabled AI-assisted development."
+      - "Built an initial geoscience compute toolkit (CLI tools, Docker images, Terraform modules)
+        to unblock researchers from a shared bottleneck; then iteratively redesigned data access
+        as a datalake with S3 mounted directly as a filesystem, eliminating manual copying and
+        reducing storage spend by ~80%."
+      - "Co-developed Comet, a cloud-native geochemistry analysis service on Terraform and
+        Databricks, delivering Python-based geochem workflows to production in 3 months and
+        launching a new commercial analytical product."
+      - "Led a cross-team AWS cost optimisation initiative, implementing spend alerts, dashboards,
+        and upskilling on instance provisioning, cutting overall spend by ~15%."
+    skills:
+      - Go
+      - TypeScript
+      - Python
+      - GitLab CI
+      - AWS
+      - Terraform
+      - Databricks
+      - Containerisation
+
+  - title: Software Engineer
+    company: Buf Technologies
+    location: Hybrid | Toronto, CA
+    startDate: Feb 2023
+    endDate: Oct 2023
+    highlights:
+      - "Pioneered Swift and Python SDK generation on the Buf Schema Registry (BSR), expanding
+        remote client/server stub support beyond the existing language offerings, on a registry
+        serving hundreds of thousands of requests daily."
+      - "Designed and implemented server-side schema integrity enforcement, blocking unsafe
+        Protobuf changes and naming conflicts before production, ensuring stable API contracts
+        across organisation teams."
+      - "Built the managed modules sync pipeline, automatically mirroring community Protobuf
+        schemas (Google APIs, gRPC, OpenTelemetry) to enterprise BSR instances, giving
+        organisations immediate access to the broader Protobuf ecosystem."
+    skills:
+      - Go
+      - gRPC
+      - Swift
+      - Python
+      - Terraform
+      - Kubernetes
+      - GCP
+      - Containerisation
+
+  - title: Senior Software Engineer
+    company: "Commonwealth Bank of Australia"
+    location: Remote | Melbourne, AU
+    startDate: Aug 2022
+    endDate: Nov 2022
+    highlights:
+      - "Architected a developer experience toolkit of reusable Go libraries, code-generation
+        templates, and reference applications, enabling platform engineering teams to ship
+        production-ready solutions without boilerplate overhead."
+      - "Led developer experience design and engineer mentorship, establishing clear, repeatable
+        delivery patterns that allowed onboarding engineers to contribute immediately using
+        the toolkit."
+    skills:
+      - Go
+      - GitHub Actions
+      - Argo CD
+      - AWS
+      - Crossplane
+
+  - title: Software Engineer
+    company: "ANZ Bank, ANZ Plus"
+    location: Melbourne, AU
+    startDate: Feb 2019
+    endDate: Aug 2022
+    highlights:
+      - "Led redevelopment of a core Java service into a cloud-native Go microservice, establishing
+        Go as ANZ Plus's standard backend language and delivering measurable gains in CPU efficiency,
+        resource costs, and request throughput."
+      - "Architected and delivered a full-stack document generation platform from initial concept to production,
+        replacing a five-figure monthly vendor cost. Built on BigQuery and Apache Beam, it processed
+        terabytes per run, cut generation time from 12+ hours to under 4, and became the
+        organisation's standard platform."
+      - "Deployed ANZ Plus's first Go microservice within a month of joining, establishing a
+        path-to-production blueprint that enabled teams to ship follow-up services within weeks
+        and launch the internal alpha."
+    skills:
+      - Go
+      - GCP
+      - Java
+      - gRPC
+      - Kubernetes
+      - Containerisation
+      - BigQuery
+      - Terraform
+      - GitHub Actions
+      - Apache Beam
+
+  - title: Junior Software Engineer
+    company: DisplaySweet
+    location: Melbourne, AU
+    startDate: Feb 2018
+    endDate: Feb 2019
+    highlights:
+      - "Built event-driven C# gRPC workers to propagate Salesforce state changes across internal
+        services and databases, enabling reliable async communication between systems."
+      - "Independently designed and shipped an internal Flutter app giving account managers
+        real-time Salesforce integration status, replacing ad-hoc developer check-ins with
+        proactive automated notifications."
+      - "Led migration of legacy PHP cron scripts to versioned Go binaries deployed as AWS
+        Lambda functions, improving reliability, auditability, and operational scalability."
+    skills:
+      - C#
+      - Dart
+      - Flutter
+      - gRPC
+      - AWS
+      - Firebase
+      - Rancher On-Premise
+
+# ---------------------------------------------------------------------------
+# Education
+# ---------------------------------------------------------------------------
+education:
+  - degree: Bachelor of Information Technology
+    institution: Deakin University
+    location: Melbourne, AU
+    year: 2016 – 2018
+    note: Programming & Chinese majors. Graduate with distinction.
+
+  - degree: Intensive In-Country Language Program
+    institution: Nanjing Normal University
+    location: Nanjing, CN
+    year: Nov – Dec 2016
+    note: A two month in-country language program at Deakin University's sister school.
+
+# ---------------------------------------------------------------------------
+# Notable projects / open-source contributions
+# ---------------------------------------------------------------------------
+projects:
+  - name: evy
+    url: https://github.com/evylang/evy
+    description: "Contributed to compiler development for evy, an open-source
+      programming language designed to introduce coding to beginners and students
+      in early education."
+  - name: go-pic
+    url: https://github.com/foundatn-io/go-pic
+    description: "Open-source Go library for integrating legacy COBOL data with modern Go
+      applications. Decodes fixed-width COBOL copybook files via struct tags, and includes
+      a CLI that auto-generates Go structs from copybook definitions, eliminating manual
+      parsing boilerplate when modernising COBOL systems."
