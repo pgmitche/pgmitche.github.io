@@ -223,29 +223,64 @@ export function renderTimeline(data: ResumeData, root: HTMLElement): void {
     scheduleSnap(WHEEL_SNAP_IDLE_MS);
   };
 
-  // ── Input: touch (live tracking + snap-on-end) ───────────────────────────────
-  // touchmove tracks live finger position so the track follows immediately.
-  // preventDefault blocks Safari rubber-band / overscroll interference.
-  let touchLastY = 0;
+  // ── Input: touch (live tracking + inertia + momentum snap) ──────────────────
+  // Finger down  → track follows 1:1, no lag.
+  // Finger up     → inertia continues in the rAF loop (exponential decay),
+  //                 mimicking native iOS momentum scroll.
+  // Inertia stops → snap to nearest card.
+  // Velocity is computed over the last 100 ms of touch history so a fast flick
+  // near lift-off isn't washed out by the finger decelerating at the end.
+
+  let touchLastY  = 0;
+  let touchInertiaVelocity = 0; // px/frame, active after touchend
+  let touchActive = false;
+  // Ring buffer of recent samples for robust velocity measurement.
+  const TOUCH_HISTORY_MS = 100;
+  const touchHistory: { y: number; t: number }[] = [];
 
   const onTouchStart = (e: TouchEvent) => {
+    touchActive = true;
     touchLastY = e.touches[0].clientY;
-    // Cancel any in-flight snap so a new gesture starts from the current position.
+    touchInertiaVelocity = 0;
+    touchHistory.length = 0;
+    touchHistory.push({ y: touchLastY, t: performance.now() });
     if (snapTimer !== null) { clearTimeout(snapTimer); snapTimer = null; }
   };
 
   const onTouchMove = (e: TouchEvent) => {
     e.preventDefault();
-    if (!initialized) return;
-    const y = e.touches[0].clientY;
+    if (!initialized || !touchActive) return;
+    const y   = e.touches[0].clientY;
+    const now = performance.now();
     const delta = touchLastY - y; // positive = scrolling down
     touchLastY = y;
-    targetScrollY = Math.max(getMinScrollY(), Math.min(getMaxScrollY(), targetScrollY + delta));
+
+    // Maintain a sliding 100 ms window of samples.
+    touchHistory.push({ y, t: now });
+    while (touchHistory.length > 1 && now - touchHistory[0].t > TOUCH_HISTORY_MS) {
+      touchHistory.shift();
+    }
+
+    const min = getMinScrollY();
+    const max = getMaxScrollY();
+    targetScrollY  = Math.max(min, Math.min(max, targetScrollY  + delta));
+    currentScrollY = Math.max(min, Math.min(max, currentScrollY + delta));
   };
 
   const onTouchEnd = () => {
-    // Small delay lets the lerp reach roughly where the finger left off before snapping.
-    scheduleSnap(80);
+    touchActive = false;
+
+    // Derive velocity from the 100 ms history window — captures the true
+    // intent speed rather than the near-zero delta of the final micro-event.
+    const now = performance.now();
+    const old = touchHistory.find(h => now - h.t <= TOUCH_HISTORY_MS);
+    const newest = touchHistory[touchHistory.length - 1];
+    if (old && newest && newest.t > old.t) {
+      const windowVelocityPxMs = (old.y - newest.y) / (newest.t - old.t); // px/ms
+      // Convert to px/frame at 60 fps, then hand off to the inertia loop.
+      touchInertiaVelocity = windowVelocityPxMs * 16.667;
+    }
+    // Inertia + snap is driven by the rAF tick while touchActive === false.
   };
 
   // ── Input: keyboard ──────────────────────────────────────────────────────────
@@ -299,9 +334,25 @@ export function renderTimeline(data: ResumeData, root: HTMLElement): void {
     lastTime = time;
     const lerpFactor = 1 - Math.pow(1 - CAROUSEL_LERP_FACTOR, dt / 16.667);
 
-    currentScrollY += (targetScrollY - currentScrollY) * lerpFactor;
-    if (Math.abs(targetScrollY - currentScrollY) < CAROUSEL_SNAP_THRESHOLD_PX) {
-      currentScrollY = targetScrollY;
+    // Touch inertia: after finger lifts, continue scrolling with exponential decay
+    // (same physics as native iOS momentum scroll) until velocity winds down,
+    // then snap to the nearest card.
+    if (!touchActive && Math.abs(touchInertiaVelocity) > 0.5) {
+      const min = getMinScrollY();
+      const max = getMaxScrollY();
+      currentScrollY = Math.max(min, Math.min(max, currentScrollY + touchInertiaVelocity));
+      targetScrollY  = currentScrollY;
+      touchInertiaVelocity *= 0.92; // decay rate — lower = quicker stop, higher = longer glide
+      // Once inertia winds down, snap to nearest card.
+      if (Math.abs(touchInertiaVelocity) <= 0.5) {
+        touchInertiaVelocity = 0;
+        setActive(getNearestIndex(currentScrollY));
+      }
+    } else {
+      currentScrollY += (targetScrollY - currentScrollY) * lerpFactor;
+      if (Math.abs(targetScrollY - currentScrollY) < CAROUSEL_SNAP_THRESHOLD_PX) {
+        currentScrollY = targetScrollY;
+      }
     }
 
     if (currentScrollY !== lastScrollY) {
