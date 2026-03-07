@@ -212,7 +212,12 @@ export function renderTimeline(data: ResumeData, root: HTMLElement): void {
     // Normalise deltaMode: line (~16 px/line) and page are uncommon but possible.
     const delta = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * 600 : e.deltaY;
 
-    targetScrollY = Math.max(getMinScrollY(), Math.min(getMaxScrollY(), targetScrollY + delta));
+    const min = getMinScrollY();
+    const max = getMaxScrollY();
+    targetScrollY  = Math.max(min, Math.min(max, targetScrollY  + delta));
+    // Move currentScrollY in lock-step so the track follows input with zero lag.
+    // The lerp only runs during the snap-to-card animation after the gesture ends.
+    currentScrollY = Math.max(min, Math.min(max, currentScrollY + delta));
 
     // After the gesture (and OS inertia) settles, snap to the nearest card.
     scheduleSnap(WHEEL_SNAP_IDLE_MS);
