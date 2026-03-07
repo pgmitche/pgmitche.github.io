@@ -3,7 +3,7 @@ import { el } from "./dom.ts";
 import {
   CAROUSEL_LERP_FACTOR,
   CAROUSEL_SNAP_THRESHOLD_PX,
-  WHEEL_DEBOUNCE_MS,
+  WHEEL_SNAP_IDLE_MS,
   TOUCH_SWIPE_THRESHOLD_PX,
   DITHER_SEEDS,
   DITHER_FEFLOOD_DEFAULT,
@@ -145,9 +145,10 @@ export function renderTimeline(data: ResumeData, root: HTMLElement): void {
   root.appendChild(dither);
   root.appendChild(headerOverlay);
 
-  // ── Carousel state ───────────────────────────────────────────────────────────
-  // The active entry is kept centred in trackViewport via JS-driven translateY.
-  // Navigation is discrete (one step at a time); the track lerps smoothly.
+  // ── Scroll state ──────────────────────────────────────────────────────────────
+  // targetScrollY is driven directly by wheel delta (continuous) and snaps to
+  // the nearest entry center after a brief idle period. currentScrollY follows
+  // via exponential lerp each rAF tick, producing smooth deceleration.
 
   let activeIndex = 0;
   let currentScrollY = 0;
@@ -160,31 +161,60 @@ export function renderTimeline(data: ResumeData, root: HTMLElement): void {
     return entry.offsetTop + entry.offsetHeight / 2 - trackViewport.clientHeight / 2;
   }
 
-  /** Applies distance-based opacity classes to all entries and updates the dither colour. */
-  function setActive(index: number): void {
-    activeIndex = Math.max(0, Math.min(entries.length - 1, index));
-    targetScrollY = getTargetScrollY(activeIndex);
+  function getMinScrollY(): number { return getTargetScrollY(0); }
+  function getMaxScrollY(): number { return getTargetScrollY(entries.length - 1); }
 
+  /** Returns the index of the entry whose center is closest to scrollY. */
+  function getNearestIndex(scrollY: number): number {
+    let nearest = 0;
+    let minDist = Infinity;
+    for (let i = 0; i < entries.length; i++) {
+      const dist = Math.abs(getTargetScrollY(i) - scrollY);
+      if (dist < minDist) { minDist = dist; nearest = i; }
+    }
+    return nearest;
+  }
+
+  /** Updates opacity classes and dither colour without changing targetScrollY. */
+  function updateActiveClasses(index: number): void {
+    activeIndex = Math.max(0, Math.min(entries.length - 1, index));
     for (let i = 0; i < entries.length; i++) {
       const dist = Math.abs(i - activeIndex);
       entries[i].classList.toggle("is-active",   dist === 0);
       entries[i].classList.toggle("is-adjacent", dist === 1);
       entries[i].classList.toggle("is-far",      dist >= 2);
     }
-
     const color = entries[activeIndex]?.style.getPropertyValue("--company-color") || DITHER_FEFLOOD_DEFAULT;
     feFlood.setAttribute("flood-color", color);
   }
 
-  // ── Input: wheel (debounced) ─────────────────────────────────────────────────
-  let wheelLocked = false;
+  /** Snaps targetScrollY to the given entry and updates classes. Used by keyboard/touch. */
+  function setActive(index: number): void {
+    updateActiveClasses(index);
+    targetScrollY = getTargetScrollY(activeIndex);
+  }
+
+  // ── Input: wheel (continuous scroll + snap-on-idle) ──────────────────────────
+  // Wheel delta is applied directly to targetScrollY so the track moves with
+  // the gesture. After WHEEL_SNAP_IDLE_MS of silence (including OS inertia
+  // wind-down) we snap targetScrollY to the nearest card center.
+  let wheelIdleTimer: ReturnType<typeof setTimeout> | null = null;
+
   const onWheel = (e: WheelEvent) => {
     e.preventDefault();
-    if (wheelLocked) return;
-    wheelLocked = true;
-    setTimeout(() => { wheelLocked = false; }, WHEEL_DEBOUNCE_MS);
-    if (e.deltaY > 0) setActive(activeIndex + 1);
-    else if (e.deltaY < 0) setActive(activeIndex - 1);
+    if (!initialized) return;
+
+    // Normalise deltaMode: line (~16 px/line) and page are uncommon but possible.
+    const delta = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * 600 : e.deltaY;
+
+    targetScrollY = Math.max(getMinScrollY(), Math.min(getMaxScrollY(), targetScrollY + delta));
+
+    // After the gesture (and OS inertia) settles, snap to the nearest card.
+    if (wheelIdleTimer !== null) clearTimeout(wheelIdleTimer);
+    wheelIdleTimer = setTimeout(() => {
+      setActive(getNearestIndex(currentScrollY));
+      wheelIdleTimer = null;
+    }, WHEEL_SNAP_IDLE_MS);
   };
 
   // ── Input: touch (swipe threshold) ──────────────────────────────────────────
@@ -246,6 +276,11 @@ export function renderTimeline(data: ResumeData, root: HTMLElement): void {
 
     if (currentScrollY !== lastScrollY) {
       track.style.transform = `translateY(-${currentScrollY}px)`;
+
+      // Keep the highlighted card in sync with scroll position during free scroll.
+      const nearest = getNearestIndex(currentScrollY);
+      if (nearest !== activeIndex) updateActiveClasses(nearest);
+
       ditherSeedIndex = (ditherSeedIndex + 1) % DITHER_SEEDS.length;
       feTurbulence.setAttribute("seed", String(DITHER_SEEDS[ditherSeedIndex]));
       lastScrollY = currentScrollY;
@@ -256,6 +291,7 @@ export function renderTimeline(data: ResumeData, root: HTMLElement): void {
 
   timelineCleanup = () => {
     cancelAnimationFrame(rafId);
+    if (wheelIdleTimer !== null) clearTimeout(wheelIdleTimer);
     window.removeEventListener("wheel", onWheel);
     window.removeEventListener("touchstart", onTouchStart);
     window.removeEventListener("touchend", onTouchEnd);

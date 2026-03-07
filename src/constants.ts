@@ -5,16 +5,19 @@
 
 // ── Carousel physics ─────────────────────────────────────────────────────────
 
-/** Fraction of remaining distance covered per animation frame (exponential lerp). */
-export const CAROUSEL_LERP_FACTOR = 0.13;
+/** Fraction of remaining distance covered per animation frame (exponential lerp).
+ *  Higher = more responsive; lower = floatier. 0.20 tracks input closely while
+ *  still giving a smooth deceleration on snap. */
+export const CAROUSEL_LERP_FACTOR = 0.20;
 
 /** Below this pixel delta the lerp snaps to the target to prevent jitter. */
 export const CAROUSEL_SNAP_THRESHOLD_PX = 0.5;
 
 // ── Input thresholds ─────────────────────────────────────────────────────────
 
-/** Milliseconds to lock out subsequent wheel events after one navigation step fires. */
-export const WHEEL_DEBOUNCE_MS = 520;
+/** Milliseconds of wheel silence before the track snaps to the nearest card.
+ *  Accounts for macOS trackpad inertia tail-off (~150–300 ms after lift). */
+export const WHEEL_SNAP_IDLE_MS = 180;
 
 /** Minimum vertical pixel delta before a touch swipe registers as navigation. */
 export const TOUCH_SWIPE_THRESHOLD_PX = 44;
