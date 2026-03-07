@@ -4,7 +4,6 @@ import {
   CAROUSEL_LERP_FACTOR,
   CAROUSEL_SNAP_THRESHOLD_PX,
   WHEEL_SNAP_IDLE_MS,
-  TOUCH_SWIPE_THRESHOLD_PX,
   DITHER_SEEDS,
   DITHER_FEFLOOD_DEFAULT,
   FALLBACK_COMPANY_COLOR,
@@ -146,9 +145,9 @@ export function renderTimeline(data: ResumeData, root: HTMLElement): void {
   root.appendChild(headerOverlay);
 
   // ── Scroll state ──────────────────────────────────────────────────────────────
-  // targetScrollY is driven directly by wheel delta (continuous) and snaps to
-  // the nearest entry center after a brief idle period. currentScrollY follows
-  // via exponential lerp each rAF tick, producing smooth deceleration.
+  // targetScrollY is driven directly by input (continuous) and snaps to the
+  // nearest entry center after a brief idle period. currentScrollY follows via
+  // a frame-rate-independent exponential lerp so the feel is consistent at any fps.
 
   let activeIndex = 0;
   let currentScrollY = 0;
@@ -188,18 +187,24 @@ export function renderTimeline(data: ResumeData, root: HTMLElement): void {
     feFlood.setAttribute("flood-color", color);
   }
 
-  /** Snaps targetScrollY to the given entry and updates classes. Used by keyboard/touch. */
+  /** Snaps targetScrollY to the given entry and updates classes. Used by keyboard/touch discrete. */
   function setActive(index: number): void {
     updateActiveClasses(index);
     targetScrollY = getTargetScrollY(activeIndex);
   }
 
-  // ── Input: wheel (continuous scroll + snap-on-idle) ──────────────────────────
-  // Wheel delta is applied directly to targetScrollY so the track moves with
-  // the gesture. After WHEEL_SNAP_IDLE_MS of silence (including OS inertia
-  // wind-down) we snap targetScrollY to the nearest card center.
-  let wheelIdleTimer: ReturnType<typeof setTimeout> | null = null;
+  // Shared idle-snap timer — reused by both wheel and touch handlers.
+  let snapTimer: ReturnType<typeof setTimeout> | null = null;
 
+  function scheduleSnap(delayMs: number): void {
+    if (snapTimer !== null) clearTimeout(snapTimer);
+    snapTimer = setTimeout(() => {
+      setActive(getNearestIndex(currentScrollY));
+      snapTimer = null;
+    }, delayMs);
+  }
+
+  // ── Input: wheel (continuous scroll + snap-on-idle) ──────────────────────────
   const onWheel = (e: WheelEvent) => {
     e.preventDefault();
     if (!initialized) return;
@@ -210,22 +215,32 @@ export function renderTimeline(data: ResumeData, root: HTMLElement): void {
     targetScrollY = Math.max(getMinScrollY(), Math.min(getMaxScrollY(), targetScrollY + delta));
 
     // After the gesture (and OS inertia) settles, snap to the nearest card.
-    if (wheelIdleTimer !== null) clearTimeout(wheelIdleTimer);
-    wheelIdleTimer = setTimeout(() => {
-      setActive(getNearestIndex(currentScrollY));
-      wheelIdleTimer = null;
-    }, WHEEL_SNAP_IDLE_MS);
+    scheduleSnap(WHEEL_SNAP_IDLE_MS);
   };
 
-  // ── Input: touch (swipe threshold) ──────────────────────────────────────────
-  let touchStartY = 0;
-  const onTouchStart = (e: TouchEvent) => { touchStartY = e.touches[0].clientY; };
-  const onTouchEnd = (e: TouchEvent) => {
-    const dy = touchStartY - e.changedTouches[0].clientY;
-    if (Math.abs(dy) > TOUCH_SWIPE_THRESHOLD_PX) {
-      if (dy > 0) setActive(activeIndex + 1);
-      else        setActive(activeIndex - 1);
-    }
+  // ── Input: touch (live tracking + snap-on-end) ───────────────────────────────
+  // touchmove tracks live finger position so the track follows immediately.
+  // preventDefault blocks Safari rubber-band / overscroll interference.
+  let touchLastY = 0;
+
+  const onTouchStart = (e: TouchEvent) => {
+    touchLastY = e.touches[0].clientY;
+    // Cancel any in-flight snap so a new gesture starts from the current position.
+    if (snapTimer !== null) { clearTimeout(snapTimer); snapTimer = null; }
+  };
+
+  const onTouchMove = (e: TouchEvent) => {
+    e.preventDefault();
+    if (!initialized) return;
+    const y = e.touches[0].clientY;
+    const delta = touchLastY - y; // positive = scrolling down
+    touchLastY = y;
+    targetScrollY = Math.max(getMinScrollY(), Math.min(getMaxScrollY(), targetScrollY + delta));
+  };
+
+  const onTouchEnd = () => {
+    // Small delay lets the lerp reach roughly where the finger left off before snapping.
+    scheduleSnap(80);
   };
 
   // ── Input: keyboard ──────────────────────────────────────────────────────────
@@ -239,18 +254,21 @@ export function renderTimeline(data: ResumeData, root: HTMLElement): void {
     }
   };
 
-  window.addEventListener("wheel", onWheel, { passive: false });
-  window.addEventListener("touchstart", onTouchStart, { passive: true });
-  window.addEventListener("touchend", onTouchEnd, { passive: true });
-  window.addEventListener("keydown", onKeyDown);
+  window.addEventListener("wheel",      onWheel,      { passive: false });
+  window.addEventListener("touchstart", onTouchStart, { passive: true  });
+  window.addEventListener("touchmove",  onTouchMove,  { passive: false }); // must be non-passive for preventDefault
+  window.addEventListener("touchend",   onTouchEnd,   { passive: true  });
+  window.addEventListener("keydown",    onKeyDown);
 
   // ── rAF loop ─────────────────────────────────────────────────────────────────
   let lastScrollY = -1;
+  let lastTime = 0;
   let rafId = 0;
   let initialized = false;
   let ditherSeedIndex = 0;
+  let ditherFrame = 0;
 
-  function tick() {
+  function tick(time: number) {
     rafId = requestAnimationFrame(tick);
 
     if (!initialized) {
@@ -263,13 +281,20 @@ export function renderTimeline(data: ResumeData, root: HTMLElement): void {
       track.style.paddingTop    = `${halfVP}px`;
       track.style.paddingBottom = `${halfVP}px`;
 
-      targetScrollY = getTargetScrollY(0);
+      targetScrollY  = getTargetScrollY(0);
       currentScrollY = targetScrollY;
+      lastTime       = time;
       setActive(0);
       initialized = true;
+      return;
     }
 
-    currentScrollY += (targetScrollY - currentScrollY) * CAROUSEL_LERP_FACTOR;
+    // Frame-rate-independent lerp: same deceleration feel at 30 fps as at 60 fps.
+    const dt = Math.min(time - lastTime, 50); // cap at 50 ms to absorb tab-switch gaps
+    lastTime = time;
+    const lerpFactor = 1 - Math.pow(1 - CAROUSEL_LERP_FACTOR, dt / 16.667);
+
+    currentScrollY += (targetScrollY - currentScrollY) * lerpFactor;
     if (Math.abs(targetScrollY - currentScrollY) < CAROUSEL_SNAP_THRESHOLD_PX) {
       currentScrollY = targetScrollY;
     }
@@ -277,12 +302,18 @@ export function renderTimeline(data: ResumeData, root: HTMLElement): void {
     if (currentScrollY !== lastScrollY) {
       track.style.transform = `translateY(-${currentScrollY}px)`;
 
-      // Keep the highlighted card in sync with scroll position during free scroll.
+      // Keep the highlighted card in sync with position during free scroll.
       const nearest = getNearestIndex(currentScrollY);
       if (nearest !== activeIndex) updateActiveClasses(nearest);
 
-      ditherSeedIndex = (ditherSeedIndex + 1) % DITHER_SEEDS.length;
-      feTurbulence.setAttribute("seed", String(DITHER_SEEDS[ditherSeedIndex]));
+      // Throttle feTurbulence updates to every 4th frame — SVG filter
+      // recalculation is expensive on mobile GPUs and imperceptible at full rate.
+      ditherFrame++;
+      if (ditherFrame % 4 === 0) {
+        ditherSeedIndex = (ditherSeedIndex + 1) % DITHER_SEEDS.length;
+        feTurbulence.setAttribute("seed", String(DITHER_SEEDS[ditherSeedIndex]));
+      }
+
       lastScrollY = currentScrollY;
     }
   }
@@ -291,10 +322,11 @@ export function renderTimeline(data: ResumeData, root: HTMLElement): void {
 
   timelineCleanup = () => {
     cancelAnimationFrame(rafId);
-    if (wheelIdleTimer !== null) clearTimeout(wheelIdleTimer);
-    window.removeEventListener("wheel", onWheel);
+    if (snapTimer !== null) clearTimeout(snapTimer);
+    window.removeEventListener("wheel",      onWheel);
     window.removeEventListener("touchstart", onTouchStart);
-    window.removeEventListener("touchend", onTouchEnd);
-    window.removeEventListener("keydown", onKeyDown);
+    window.removeEventListener("touchmove",  onTouchMove);
+    window.removeEventListener("touchend",   onTouchEnd);
+    window.removeEventListener("keydown",    onKeyDown);
   };
 }

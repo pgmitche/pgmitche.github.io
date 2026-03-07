@@ -11,7 +11,10 @@
 
 import puppeteer from "puppeteer";
 import { $ } from "bun";
-import resume from "../src/data/resume.ts";
+import { load } from "js-yaml";
+import type { ResumeData } from "../src/data/resume.ts";
+
+const resume = load(await Bun.file("resume.yaml").text()) as ResumeData;
 
 const PORT = 4173;
 const SERVER_STARTUP_MS = 1500; // time for vite preview to bind before browser connects
@@ -48,7 +51,7 @@ try {
     path: FILENAME,
     format: "A4",
     printBackground: true,
-    margin: { top: "1.5cm", right: "1.5cm", bottom: "1.5cm", left: "1.5cm" },
+    margin: { top: "1.2cm", right: "1.5cm", bottom: "1.2cm", left: "1.5cm" },
   });
 
   console.log(`✓ PDF saved: ${FILENAME}`);

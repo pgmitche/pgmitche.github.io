@@ -259,10 +259,12 @@ a:hover {
 
 .role-highlights {
   padding-left: var(--spacing-lg);
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-xs);
   margin-top: var(--spacing-sm);
+  list-style: disc;
+}
+
+.role-highlights li + li {
+  margin-top: var(--spacing-xs);
 }
 
 .role-highlights li {
@@ -793,19 +795,29 @@ html.is-timeline {
    Print
    ============================================================ */
 @media print {
+  :root {
+    --spacing-xl: 1.1rem;
+    --spacing-lg: 0.875rem;
+    --spacing-md: 0.6rem;
+    --spacing-sm: 0.35rem;
+    --spacing-xs: 0.2rem;
+  }
+
   html {
     background: #fff;
+    font-size: 10.5pt;
   }
 
   body {
     padding: 0;
-    font-size: 13px;
+    line-height: 1.5;
   }
 
   .resume {
     box-shadow: none;
     border-radius: 0;
     padding: 0;
+    max-width: 100%;
   }
 
   a {
