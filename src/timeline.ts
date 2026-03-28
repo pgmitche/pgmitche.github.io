@@ -1,5 +1,5 @@
 import type { ResumeData, Role } from "./data/resume.ts";
-import { el } from "./dom.ts";
+import { el, svgIcon, ICONS } from "./dom.ts";
 import {
   CAROUSEL_LERP_FACTOR,
   CAROUSEL_SNAP_THRESHOLD_PX,
@@ -119,7 +119,7 @@ export function cleanupTimeline(): void {
 export function renderTimeline(data: ResumeData, root: HTMLElement): void {
   cleanupTimeline();
 
-  const { name, tagline, experience } = data;
+  const { name, tagline, experience, contact } = data;
   const entries = experience.map(renderEntry);
 
   const vignette = el("div", { class: "tl-vignette" });
@@ -130,11 +130,44 @@ export function renderTimeline(data: ResumeData, root: HTMLElement): void {
   const trackViewport = el("div", { class: "tl-track-viewport" }, track);
   const page = el("div", { class: "tl-page" }, trackViewport);
 
+  // Social icon links for the header.
+  const socialLinks: (string | Node)[] = [];
+  if (contact.github && contact.githubOrg) {
+    // Both accounts: expandable node that fans out subnodes on hover.
+    const personalNode = el("a", {
+      href: `https://github.com/${contact.github}`,
+      target: "_blank", rel: "noopener",
+      class: "tl-github-subnode",
+      title: `github.com/${contact.github}`,
+      "aria-label": "Personal GitHub",
+    }, svgIcon(ICONS.person));
+    const orgNode = el("a", {
+      href: `https://github.com/${contact.githubOrg}`,
+      target: "_blank", rel: "noopener",
+      class: "tl-github-subnode",
+      title: `github.com/${contact.githubOrg}`,
+      "aria-label": "GitHub Org",
+    }, svgIcon(ICONS.building));
+    socialLinks.push(el("div", { class: "tl-social-link tl-social-github-expand", "aria-label": "GitHub" },
+      svgIcon(ICONS.github),
+      el("div", { class: "tl-github-subnodes" }, personalNode, orgNode),
+    ));
+  } else if (contact.github || contact.githubOrg) {
+    const href = contact.github
+      ? `https://github.com/${contact.github}`
+      : `https://github.com/${contact.githubOrg}`;
+    socialLinks.push(el("a", { href, target: "_blank", rel: "noopener", class: "tl-social-link", "aria-label": "GitHub" }, svgIcon(ICONS.github)));
+  }
+  if (contact.linkedin) {
+    socialLinks.push(el("a", { href: `https://linkedin.com/${contact.linkedin}`, target: "_blank", rel: "noopener", class: "tl-social-link", "aria-label": "LinkedIn" }, svgIcon(ICONS.linkedin)));
+  }
+
   // Header overlay appended last so it paints above the vignette and dither.
   const headerOverlay = el("div", { class: "tl-header-overlay" },
     el("div", { class: "tl-header-text" },
       el("h1", { class: "tl-name" }, name),
       el("p", { class: "tl-tagline" }, tagline),
+      ...(socialLinks.length > 0 ? [el("div", { class: "tl-social" }, ...socialLinks)] : []),
     ),
     el("a", { href: "#resume", class: "tl-resume-btn" }, "Résumé"),
   );

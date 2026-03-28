@@ -46,14 +46,15 @@ try {
   // Match A4 viewport so layout is stable before printing
   await page.setViewport({ width: 794, height: 1123 });
   await page.goto(`http://localhost:${PORT}/#resume`, { waitUntil: "networkidle0" });
+  await page.waitForSelector(".resume", { visible: true });
 
-  await page.pdf({
-    path: FILENAME,
+  const pdfBuffer = await page.pdf({
     format: "A4",
     printBackground: true,
     margin: { top: "1.2cm", right: "1.5cm", bottom: "1.2cm", left: "1.5cm" },
   });
 
+  await Bun.write(FILENAME, pdfBuffer);
   console.log(`✓ PDF saved: ${FILENAME}`);
 } finally {
   await browser.close();
